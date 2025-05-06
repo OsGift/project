@@ -59,7 +59,12 @@ func uploadTemplate(c *gin.Context) {
 		showErrorPage(c, fmt.Sprintf("Template upload error: %v", err), http.StatusBadRequest)
 		return
 	}
-	c.SaveUploadedFile(file, filepath.Join("templates", file.Filename))
+	err = c.SaveUploadedFile(file, filepath.Join("templates", file.Filename))
+	if err != nil {
+		logrus.Errorf("Error saving template file: %v", err)
+		showErrorPage(c, fmt.Sprintf("Error saving template file: %v", err), http.StatusInternalServerError)
+		return
+	}
 	c.Redirect(http.StatusSeeOther, "/")
 }
 
@@ -69,13 +74,26 @@ func uploadCSV(c *gin.Context) {
 		showErrorPage(c, fmt.Sprintf("CSV upload error: %v", err), http.StatusBadRequest)
 		return
 	}
-	c.SaveUploadedFile(file, filepath.Join("uploads", file.Filename))
+	err = c.SaveUploadedFile(file, filepath.Join("uploads", file.Filename))
+	if err != nil {
+		logrus.Errorf("Error saving CSV file: %v", err)
+		showErrorPage(c, fmt.Sprintf("Error saving CSV file: %v", err), http.StatusInternalServerError)
+		return
+	}
 	c.Redirect(http.StatusSeeOther, "/")
 }
 
 func sendEmails(c *gin.Context) {
 	templateName := c.PostForm("template")
 	csvFile := c.PostForm("csvfile")
+
+	// Check if the template file exists
+	templatePath := filepath.Join("templates", templateName)
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		logrus.Errorf("Template file not found: %s", templatePath)
+		showErrorPage(c, fmt.Sprintf("Template file not found: %s", templateName), http.StatusBadRequest)
+		return
+	}
 
 	file, err := os.Open(filepath.Join("uploads", csvFile))
 	if err != nil {
@@ -115,6 +133,13 @@ func sendEmails(c *gin.Context) {
 		subject := "Your Subject Here"
 		body := parseTemplate(templateName, data)
 
+		if body == "" {
+			// parseTemplate already logs the error.
+			// We should just return here to avoid sending emails with empty bodies.
+			showErrorPage(c, fmt.Sprintf("Failed to parse template: %s", templateName), http.StatusInternalServerError)
+			return
+		}
+
 		// Call your existing SendEmailWithGCP function
 		if err := SendEmailWithGCP(email, subject, body, data); err != nil {
 			logrus.Errorf("Error sending email to %s: %v", email, err)
@@ -123,7 +148,27 @@ func sendEmails(c *gin.Context) {
 		}
 	}
 
-	c.String(http.StatusOK, "Emails sent successfully.")
+	// Redirect back to the index page with a success message.
+	c.HTML(http.StatusOK, "index.html", gin.H{
+		"SuccessMessage": "Emails sent successfully!",
+		"Templates":      getTemplateList(), // You'll need this to repopulate the dropdown
+	})
+}
+
+func getTemplateList() []string {
+	templates, _ := filepath.Glob("templates/*.html")
+	for i, t := range templates {
+		templates[i] = filepath.Base(t)
+	}
+	return templates
+}
+
+func getUploadsList() []string {
+	templates, _ := filepath.Glob("uploads/*.csv")
+	for i, t := range templates {
+		templates[i] = filepath.Base(t)
+	}
+	return templates
 }
 
 const (
@@ -131,11 +176,11 @@ const (
 )
 
 func SendEmailWithGCP(email, subject, temp string, variables map[string]interface{}) error {
-	// Create an SES session using the provided credentials
-
 	ctx := context.Background()
 
 	clientID := os.Getenv("GCP_SMS_CLIENT_ID")
+	fmt.Println("client id", clientID)
+
 	clientSecret := os.Getenv("GCP_SMS_CLIENT_SECRET")
 	redirectURI := os.Getenv("GCP_SMS_REDIRECT_URI")
 	refreshToken := os.Getenv("GCP_SMS_REFRESH_TOKEN")
@@ -163,8 +208,6 @@ func SendEmailWithGCP(email, subject, temp string, variables map[string]interfac
 	header["Subject"] = subject
 	header["Content-Type"] = "text/html; charset=\"utf-8\""
 
-	//header["Content-Type"] = htmlTemplate
-
 	var msg bytes.Buffer
 	for k, v := range header {
 		msg.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
@@ -173,13 +216,12 @@ func SendEmailWithGCP(email, subject, temp string, variables map[string]interfac
 
 	rawMessage := base64.URLEncoding.EncodeToString(msg.Bytes())
 
-	// Create the Gmail API message
 	message := &gmail.Message{
 		Raw: rawMessage,
 	}
 	_, err = srv.Users.Messages.Send("me", message).Do()
 	if err != nil {
-		log.Fatal("Failed to send email:", err)
+		log.Printf("Failed to send email to %s: %v", email, err)
 		return err
 	}
 
@@ -265,7 +307,7 @@ func SendEmailWithGCPWithFile(email, subject, temp string, variables map[string]
 	}
 	_, err = srv.Users.Messages.Send("me", message).Do()
 	if err != nil {
-		log.Fatal("Failed to send email:", err)
+		log.Printf("Failed to send email with file to %s: %v", email, err)
 		return err
 	}
 
@@ -274,10 +316,7 @@ func SendEmailWithGCPWithFile(email, subject, temp string, variables map[string]
 }
 
 func parseTemplate(template string, data interface{}) string {
-	// Assuming 'main.go' is run from project root
 	templatesDir := "templates"
-
-	// Construct the full path to the template file
 	filePath := filepath.Join(templatesDir, template)
 
 	tpl, err := os.ReadFile(filePath)
@@ -291,7 +330,7 @@ func parseTemplate(template string, data interface{}) string {
 }
 
 func SendEmailWithGCPWithFileAndCC(email string, ccEmails []string, subject, temp string, variables map[string]interface{}, file multipart.File, fileName string) error {
-	fmt.Println("in email with file")
+	fmt.Println("in email with file with CC")
 	ctx := context.Background()
 
 	clientID := os.Getenv("GCP_SMS_CLIENT_ID")

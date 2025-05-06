@@ -7,7 +7,7 @@
      <style>
          body {
              font-family: 'Montserrat', sans-serif;
-             background: linear-gradient(135deg, #ff6b6b 0%, #ff884b 100%);
+             background: linear-gradient(135deg, #ff6b6b 0%, #6c6fce 100%);
              color: #333;
              display: flex;
              flex-direction: column;
@@ -21,9 +21,9 @@
          }
 
          @keyframes gradientShift {
-             0% { background: linear-gradient(135deg, #ff6b6b 0%, #ff884b 100%); }
-             50% { background: linear-gradient(135deg, #ff884b 0%, #ff6b6b 100%); }
-             100% { background: linear-gradient(135deg, #ff6b6b 0%, #ff884b 100%); }
+             0% { background: linear-gradient(135deg, #ff6b6b 0%, #6c6fce 100%); }
+             50% { background: linear-gradient(135deg, #6c6fce 0%, #ff6b6b 100%); }
+             100% { background: linear-gradient(135deg, #ff6b6b 0%, #6c6fce 100%); }
          }
 
          h1 {
@@ -85,7 +85,7 @@
 
          input[type="file"]:focus {
              outline: none;
-             border-color: #ff884b;
+             border-color: #6c6fce;
              box-shadow: 0 0 10px rgba(255, 136, 75, 0.3);
          }
 
@@ -102,7 +102,7 @@
 
          input[type="text"]:focus {
              outline: none;
-             border-color: #ff884b;
+             border-color: #6c6fce;
              box-shadow: 0 0 10px rgba(255, 136, 75, 0.3);
          }
 
@@ -126,7 +126,7 @@
 
          select:focus {
              outline: none;
-             border-color: #ff884b;
+             border-color: #6c6fce;
              box-shadow: 0 0 10px rgba(255, 136, 75, 0.3);
          }
 
@@ -144,7 +144,7 @@
          }
 
          button[type="submit"] {
-             background: linear-gradient(to right, #ff884b, #ff6b6b);
+             background: linear-gradient(to right, #6c6fce, #ff6b6b);
              color: white;
              padding: 16px 30px;
              border: none;
@@ -176,7 +176,7 @@
          button[type="submit"]:hover {
              transform: translateY(-3px);
              box-shadow: 0 8px 14px rgba(0, 0, 0, 0.15);
-             background: linear-gradient(to right, #ff6b6b, #ff884b);
+             background: linear-gradient(to right, #ff6b6b, #6c6fce);
          }
 
          .form-group {
@@ -186,7 +186,48 @@
          .form-group:last-child {
              margin-bottom: 0;
          }
-     </style>
+         .success-popup {
+             display: none;
+             position: fixed;
+             top: 20px;
+             left: 50%;
+             transform: translateX(-50%);
+             background-color: #4CAF50;
+             color: white;
+             padding: 20px 30px;
+             border-radius: 8px;
+             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+             z-index: 1000;
+             animation: slideIn 0.3s ease-out, slideOut 0.3s 2.5s ease-in forwards;
+             opacity: 1;
+         }
+
+         .success-popup.show {
+             display: block;
+         }
+
+         @keyframes slideIn {
+             from {
+                 top: -50px;
+                 opacity: 0;
+             }
+             to {
+                 top: 20px;
+                 opacity: 1;
+             }
+         }
+
+         @keyframes slideOut {
+             from {
+                 top: 20px;
+                 opacity: 1;
+             }
+             to {
+                 top: -50px;
+                 opacity: 0;
+             }
+         }
+        </style>
      <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
  </head>
  <body>
@@ -218,10 +259,33 @@
              </select>
          </div>
          <div class="form-group">
+            <label for="template-select">CSV Filename:</label>
+            <select id="template-select" name="template" required>
+                {{range .Templates}}
+                <option value="{{.}}">{{.}}</option>
+                {{end}}
+            </select>
+        </div>
+         <div class="form-group">
              <label for="csvfile">CSV Filename:</label>
              <input type="text" id="csvfile" name="csvfile" required>
          </div>
          <button type="submit">Send Emails</button>
      </form>
+
+     <div id="success-popup" class="success-popup"></div>
+
+     <script>
+         const successPopup = document.getElementById('success-popup');
+         const successMessage = "{{.SuccessMessage}}";
+
+         if (successMessage) {
+             successPopup.textContent = successMessage;
+             successPopup.classList.add('show');
+             setTimeout(() => {
+                 successPopup.classList.remove('show');
+             }, 3000); // Hide after 3 seconds
+         }
+     </script>
  </body>
  </html>
